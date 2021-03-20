@@ -17,12 +17,12 @@ private:
   };
 
   std::unique_ptr<node> _head;
-  std::mutex _head_mtx;
+  mutable std::mutex _head_mtx;
   node *_tail;
-  std::mutex _tail_mtx;
+  mutable std::mutex _tail_mtx;
   std::condition_variable _data_cond;
 
-  node *get_tail() {
+  node *get_tail() const {
     std::lock_guard<std::mutex> tail_lk(_tail_mtx);
     return _tail;
   }
@@ -50,6 +50,23 @@ private:
     return pop_head();
   }
 
+  std::unique_ptr<node> try_pop_head() {
+    std::lock_guard<std::mutex> head_lk(_head_mtx);
+    if (_head.get() == get_tail()) {
+      return nullptr;
+    }
+    return pop_head();
+  }
+
+  std::unique_ptr<node> try_pop_head(T &value) {
+    std::lock_guard<std::mutex> head_lk(_head_mtx);
+    if (_head.get() == get_tail()) {
+      return nullptr;
+    }
+    value = std::move(*_head->_data);
+    return pop_head();
+  }
+
 public:
   // create a dummy node on creation to ensure there's always at least one node
   // in the queue to separate the node being accessed at the head from that
@@ -66,12 +83,6 @@ public:
   // no move assignment operator
   threadsafe_queue &operator=(threadsafe_queue &&oher) = delete;
 
-  /// Pop from the head of the queue
-  std::shared_ptr<T> try_pop() {
-    std::unique_ptr<node> old_head = pop_head();
-    return old_head != nullptr ? old_head->_data : std::shared_ptr<T>();
-  }
-
   std::shared_ptr<T> wait_and_pop() {
     std::unique_ptr<node> const old_head = wait_pop_head();
     return old_head->_data;
@@ -79,6 +90,16 @@ public:
 
   void wait_and_pop(T &value) {
     std::unique_ptr<node> const old_head = wait_pop_head(value);
+  }
+
+  std::shared_ptr<T> try_pop() {
+    std::unique_ptr<node> old_head = try_pop_head();
+    return old_head != nullptr ? old_head->_data : nullptr;
+  }
+
+  bool try_pop(T &value) {
+    std::unique_ptr<node> const old_head = try_pop_head(value);
+    return old_head != nullptr;
   }
 
   /// Push to the tail of the queue
@@ -93,6 +114,11 @@ public:
       _tail = new_tail;
     }
     _data_cond.notify_one();
+  }
+
+  bool empty() const {
+    std::lock_guard<std::mutex> head_lk(_head_mtx);
+    return (_head.get() == get_tail());
   }
 };
 
