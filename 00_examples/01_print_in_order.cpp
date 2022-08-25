@@ -23,14 +23,12 @@ void print_third(std::ostream &os) {
 
 class Foo {
 private:
-  int next;
+  int next{1};
   std::mutex mtx;
   std::condition_variable cv;
 
 public:
-  Foo() : next(1) {}
-
-  void first(std::function<void(std::ostream &)> func, std::ostream &os) {
+  void first(std::function<void(std::ostream &)> const &func, std::ostream &os) {
     std::unique_lock<std::mutex> lck(mtx);
     func(os);
     next = 2;
@@ -38,7 +36,7 @@ public:
     cv.notify_all();
   }
 
-  void second(std::function<void(std::ostream &)> func, std::ostream &os) {
+  void second(std::function<void(std::ostream &)> const &func, std::ostream &os) {
     std::unique_lock<std::mutex> lck(mtx);
     cv.wait(lck, [this]() { return this->next == 2; });
     func(os);
@@ -47,7 +45,7 @@ public:
     cv.notify_all();
   }
 
-  void third(std::function<void(std::ostream &)> func, std::ostream &os) {
+  void third(std::function<void(std::ostream &)> const &func, std::ostream &os) {
     std::unique_lock<std::mutex> lck(mtx);
     cv.wait(lck, [this]() { return this->next == 3; });
     func(os);

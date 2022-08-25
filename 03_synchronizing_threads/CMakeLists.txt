@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.20)
+project(00_examples)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/../common/CMakeLists.txt)
+
+add_executable(01_wait_for_flag 01_wait_for_flag.cpp)
+target_link_libraries(01_wait_for_flag Threads::Threads)
+add_executable(02_condition_variable 02_condition_variable.cpp)
+target_link_libraries(02_condition_variable Threads::Threads)
+add_executable(03_thread_safe_queue 03_thread_safe_queue.cpp)
+target_link_libraries(03_thread_safe_queue Threads::Threads)
+add_executable(04_async_future 04_async_future.cpp)
+target_link_libraries(04_async_future Threads::Threads)
+add_executable(05_packaged_task 05_packaged_task.cpp)
+target_link_libraries(05_packaged_task Threads::Threads)

@@ -16,3 +16,8 @@ void wait_for_flag() {
     lk.lock();
   }
 }
+
+int main() {
+  wait_for_flag();
+  return 0;
+}
