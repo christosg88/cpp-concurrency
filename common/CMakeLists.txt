@@ -36,11 +36,11 @@ if (ENABLE_STATIC_CHECKS)
       "-readability-avoid-const-params-in-decls,"
       "-readability-else-after-return,"
       "-readability-function-cognitive-complexity,"
-      "-readability-identifier-length"
-      "-readability-implicit-bool-conversion,"
+      "-readability-identifier-length,"
+      "-readability-implicit-bool-conversion"
     )
     list(
-      APPEND CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY_CHECKS})
+      APPEND CMAKE_CXX_CLANG_TIDY "--use-color" ${CLANG_TIDY_CHECKS})
   endif()
 
   find_program(CMAKE_CXX_CPPCHECK NAMES cppcheck)

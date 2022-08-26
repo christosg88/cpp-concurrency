@@ -1,32 +1,39 @@
+#include <algorithm>
 #include <condition_variable>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <queue>
+#include <thread>
 
 template <typename T>
-class threadsafe_queue {
+class threadsafe_queue
+{
 private:
   mutable std::mutex _m;
   std::queue<T> _q;
   std::condition_variable _cond;
+  bool _production_done{false};
 
 public:
-  threadsafe_queue() {}
+  threadsafe_queue() = default;
+  threadsafe_queue(threadsafe_queue const &) = delete;
+  threadsafe_queue(threadsafe_queue &&) = delete;
+  threadsafe_queue
+  operator=(threadsafe_queue const &) = delete;
+  threadsafe_queue
+  operator=(threadsafe_queue &&) = delete;
+  ~threadsafe_queue() = default;
 
-  threadsafe_queue(threadsafe_queue const &other) {
-    std::lock_guard<std::mutex> lk(other._m);
-    _q = other._q;
-  }
-
-  threadsafe_queue &operator=(threadsafe_queue const &other) = delete; // disallow copy assignement
-
-  void push(T const &val) {
+  void
+  push(T const &val) {
     std::lock_guard<std::mutex> lk(_m);
     _q.push(val);
     _cond.notify_one();
   }
 
-  bool try_pop(T &val) {
+  bool
+  try_pop(T &val) {
     std::lock_guard<std::mutex> lk(_m);
 
     if (_q.empty()) {
@@ -38,7 +45,8 @@ public:
     return true;
   }
 
-  std::shared_ptr<T> try_pop() {
+  std::shared_ptr<T>
+  try_pop() {
     std::lock_guard<std::mutex> lk(_m);
 
     if (_q.empty()) {
@@ -50,58 +58,105 @@ public:
     return p;
   }
 
-  void wait_and_pop(T &val) {
+  void
+  wait_and_pop(T &val) {
     std::unique_lock<std::mutex> lk(_m);
-    _cond.wait(lk, [this] { return !_q.empty(); });
-    val = _q.front();
-    _q.pop();
+    _cond.wait(lk, [this] { return !_q.empty() || _production_done; });
+
+    if (!_q.empty()) {
+      val = _q.front();
+      _q.pop();
+    }
   }
 
-  std::shared_ptr<T> wait_and_pop() {
+  std::shared_ptr<T>
+  wait_and_pop() {
     std::unique_lock<std::mutex> lk(_m);
-    _cond.wait(lk, [this] { return !_q.empty(); });
+    _cond.wait(lk, [this] { return !_q.empty() || _production_done; });
 
-    std::shared_ptr<T> p(std::make_shared(_q.front()));
-    _q.pop();
-    return p;
+    if (!_q.empty()) {
+      std::shared_ptr<T> p(std::make_shared<T>(_q.front()));
+      _q.pop();
+      return p;
+    } else {
+      return nullptr;
+    }
   }
 
-  bool empty() const {
+  bool
+  empty() const {
     std::lock_guard<std::mutex> lk(_m);
     return _q.empty();
   }
 
-  size_t size() const {
+  size_t
+  size() const {
     std::lock_guard<std::mutex> lk(_m);
     return _q.size();
   }
+
+  void
+  notify_production_done() {
+    std::lock_guard<std::mutex> lk(_m);
+    _production_done = true;
+    _cond.notify_all();
+  }
 };
 
-threadsafe_queue<int> data_queue;
-
-bool more_data_to_prepare() {
-  return true;
-}
-
-int prepare_data() {
-  return 42;
-}
-
-void process(int data) {
-  std::cout << data << "\n";
-}
-
-void data_preparation_thread() {
-  while (more_data_to_prepare()) {
-    int const data = prepare_data();
-    data_queue.push(data);
+template <typename T>
+void
+produce_data(threadsafe_queue<T> &q, T begin, T end) {
+  for (unsigned d = begin; d < end; ++d) {
+    q.push(d);
   }
 }
 
-void data_processing_thread() {
+template <typename T>
+void
+consume_data(threadsafe_queue<T> &q, unsigned id) {
+  static std::mutex cout_mtx;
+
   while (true) {
-    int data;
-    data_queue.wait_and_pop(data);
-    process(data);
+    auto p = q.wait_and_pop();
+    if (p == nullptr) {
+      {
+        std::lock_guard<std::mutex> lk(cout_mtx);
+        std::cout << "Consumer " << id << " stopping\n";
+      }
+      return;
+    } else {
+      {
+        std::lock_guard<std::mutex> lk(cout_mtx);
+        std::cout << "Consumer " << id << " got " << *p << "\n";
+      }
+    }
   }
+}
+
+int
+main() {
+  static constexpr size_t NUM_PRODUCERS = 20;
+  static constexpr size_t NUM_CONSUMERS = 5;
+  static constexpr size_t STEP_SIZE = 100000;
+
+  threadsafe_queue<unsigned> q;
+
+  std::vector<std::thread> producers;
+  for (unsigned i = 0; i < NUM_PRODUCERS; ++i) {
+    producers.emplace_back(
+        produce_data<unsigned>, std::ref(q), i * STEP_SIZE, (i + 1) * STEP_SIZE);
+  }
+
+  std::vector<std::thread> consumers;
+  for (unsigned i = 0; i < NUM_CONSUMERS; ++i) {
+    consumers.emplace_back(consume_data<unsigned>, std::ref(q), i);
+  }
+
+  std::for_each(
+      producers.begin(), producers.end(), std::mem_fn(&std::thread::join));
+  q.notify_production_done();
+  std::for_each(
+      consumers.begin(), consumers.end(), std::mem_fn(&std::thread::join));
+
+  return 0;
 }
