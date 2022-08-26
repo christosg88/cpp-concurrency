@@ -97,8 +97,10 @@ public:
 
   void
   notify_production_done() {
-    std::lock_guard<std::mutex> lk(_m);
-    _production_done = true;
+    {
+      std::lock_guard<std::mutex> lk(_m);
+      _production_done = true;
+    }
     _cond.notify_all();
   }
 };
@@ -137,7 +139,7 @@ int
 main() {
   static constexpr size_t NUM_PRODUCERS = 20;
   static constexpr size_t NUM_CONSUMERS = 5;
-  static constexpr size_t STEP_SIZE = 100000;
+  static constexpr size_t STEP_SIZE = 10;
 
   threadsafe_queue<unsigned> q;
 
