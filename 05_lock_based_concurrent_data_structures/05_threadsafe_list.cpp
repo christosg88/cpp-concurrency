@@ -34,7 +34,7 @@ public:
   }
 
   void push_front(T &&value) {
-    std::unique_ptr<node> new_node(new node(value));
+    std::unique_ptr<node> new_node(new node(std::move(value)));
     std::lock_guard<std::mutex> lk(_head._m);
     new_node->_next = std::move(_head._next);
     _head._next = std::move(new_node);
@@ -76,7 +76,6 @@ public:
     while (node *const next = current->_next.get()) {
       std::unique_lock<std::mutex> next_lk(next->_m);
       if (p(*next->_data)) {
-        std::unique_ptr<node> old_next = std::move(current->_next);
         current->_next = std::move(next->_next);
         next_lk.unlock();
       } else {

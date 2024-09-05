@@ -89,7 +89,7 @@ public:
   }
 
   void wait_and_pop(T &value) {
-    std::unique_ptr<node> const old_head = wait_pop_head(value);
+    wait_pop_head(value);
   }
 
   std::shared_ptr<T> try_pop() {

@@ -1,15 +1,17 @@
-#include <thread>
-#include <mutex>
+#include <mutex>  // std::mutex
+#include <memory>  // std::shared_ptr
 
-std::shared_ptr<int> resource_ptr;
+static constexpr int MAGIC = 42;
+
+std::unique_ptr<int> resource_ptr;
 std::mutex resource_mutex;
 
 // this IS thread safe because all threads will lock the mutex before querying or changing the resource_ptr, but it's
 // also SLOW, because we lock the mutex every time we try to get the resource_ptr
 void init_resource() {
-  std::lock_guard<std::mutex> lg(resource_mutex);
+  std::lock_guard<std::mutex> const lg(resource_mutex);
   if (!resource_ptr) {
-    resource_ptr.reset(new int(42));
+    resource_ptr = std::make_unique<int>(MAGIC);
   }
 }
 
@@ -23,9 +25,9 @@ void init_resource() {
 // finished constructing, and thus a call to do_something will be performed on uninitialized data
 void undefined_behaviour_with_double_checked_locking() {
   if (!resource_ptr) { // (1)
-    std::lock_guard<std::mutex> lg(resource_mutex);
+    std::lock_guard<std::mutex> const lg(resource_mutex);
     if (!resource_ptr) {
-      resource_ptr.reset(new int(42)); // (2)
+      resource_ptr = std::make_unique<int>(MAGIC); // (2)
     }
   }
   // resource_ptr->do_something(); // (3)
@@ -34,11 +36,11 @@ void undefined_behaviour_with_double_checked_locking() {
 std::once_flag resource_flag;
 
 void init_resource_2() {
-  resource_ptr.reset(new int(42));
+  resource_ptr = std::make_unique<int>(MAGIC);
 }
 
 void foo() {
-  // use of sta::call_once will typically have a lower overhead than using a mutex explicitly, especially when
+  // use of std::call_once will typically have a lower overhead than using a mutex explicitly, especially when
   // initialization has already been done
   std::call_once(resource_flag, init_resource_2);
   // resource_ptr->do_something();
